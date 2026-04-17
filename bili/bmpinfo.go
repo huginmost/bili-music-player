@@ -10,10 +10,35 @@ type BMPInfoItem struct {
 	Title string `json:"title"`
 	Pic   string `json:"pic"`
 	BVID  string `json:"bvid"`
+	Audio string `json:"audio"`
 }
 
 type BMPInfoPayload struct {
 	PLInfo []BMPInfoItem `json:"plinfo"`
+}
+
+// ReadBMPInfo reads bmpinfo.json and returns the exported playlist payload.
+func (b *Bili) ReadBMPInfo() (BMPInfoPayload, error) {
+	raw, err := os.ReadFile(BMPInfoPath)
+	if err != nil {
+		return BMPInfoPayload{}, err
+	}
+
+	var payload BMPInfoPayload
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return BMPInfoPayload{}, err
+	}
+
+	return payload, nil
+}
+
+func (b *Bili) writeBMPInfo(payload BMPInfoPayload) error {
+	formatted, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(BMPInfoPath, formatted, 0o644)
 }
 
 // GetBMPInfo reads the saved initial-state data, extracts the first section's episodes,
@@ -74,16 +99,12 @@ func (b *Bili) GetBMPInfo() ([]BMPInfoItem, error) {
 			Title: title,
 			Pic:   pic,
 			BVID:  bvid,
+			Audio: "",
 		})
 	}
 
 	payload := BMPInfoPayload{PLInfo: items}
-	formatted, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-
-	if err := os.WriteFile(BMPInfoPath, formatted, 0o644); err != nil {
+	if err := b.writeBMPInfo(payload); err != nil {
 		return nil, err
 	}
 

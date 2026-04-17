@@ -2,58 +2,80 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 
 	"github.com/huginmost/bili-music-player/bili"
 )
 
-const (
-	defaultBVID   = "BV1oU1jBXEN8"
-	defaultPIPath = "pi.json"
-	defaultISPath = "is.json"
-	defaultAudio  = "test.m4a"
-)
-
 func main() {
-	cookie := os.Getenv("BILI_COOKIE")
+	if err := run(os.Args[1:], os.Stdout); err != nil {
+		log.Fatal(err)
+	}
+}
 
-	client, err := bili.New(cookie)
+var newClient = func() (*bili.Bili, error) {
+	return bili.New(os.Getenv("BILI_COOKIE"))
+}
+
+func run(args []string, stdout io.Writer) error {
+	client, err := newClient()
 	if err != nil {
-		log.Fatalf("bili_init failed: %v", err)
+		return fmt.Errorf("bili_init failed: %w", err)
 	}
 
-	ok := client.Try()
-	fmt.Println(ok)
-	if !ok {
-		return
+	if len(args) == 0 {
+		return nil
 	}
 
-	if _, err := client.GetPlayInfo(defaultBVID, defaultPIPath); err != nil {
-		log.Fatalf("bili_get_pi failed: %v", err)
-	}
-
-	if _, err := client.GetInitialState(defaultBVID, defaultISPath); err != nil {
-		log.Fatalf("bili_get_is failed: %v", err)
-	}
-
-	title, err := client.GetUGCSeasonTitle()
-	if err != nil {
-		log.Fatalf("get title failed: %v", err)
-	}
-	fmt.Println(title)
-
-	if _, err := client.GetBMPInfo(); err != nil {
-		log.Fatalf("bili_get_bmpinfo failed: %v", err)
-	}
-
-	audioURL, err := client.GetAudio()
-	if err != nil {
-		log.Fatalf("bili_get_audio failed: %v", err)
-	}
-	fmt.Println(audioURL)
-
-	if err := client.AudioDownload(audioURL, defaultAudio); err != nil {
-		log.Fatalf("bili_audio_download failed: %v", err)
+	switch args[0] {
+	case "-try":
+		fmt.Fprintln(stdout, client.Try())
+		return nil
+	case "-get":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: bilig -get [bv]")
+		}
+		if _, err := client.GetPlayInfo(args[1], bili.PlayInfoPath); err != nil {
+			return fmt.Errorf("bili_get_pi failed: %w", err)
+		}
+		if _, err := client.GetInitialState(args[1], bili.InitialStatePath); err != nil {
+			return fmt.Errorf("bili_get_is failed: %w", err)
+		}
+		if _, err := client.GetBMPInfo(); err != nil {
+			return fmt.Errorf("bili_get_bmpinfo failed: %w", err)
+		}
+		return nil
+	case "--title":
+		title, err := client.GetUGCSeasonTitle()
+		if err != nil {
+			return fmt.Errorf("GetUGCSeasonTitle failed: %w", err)
+		}
+		fmt.Fprintln(stdout, title)
+		return nil
+	case "-fix":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: bilig -fix [bv]")
+		}
+		if err := client.FixBMPInfo(args[1]); err != nil {
+			return fmt.Errorf("bili_bmpinfo_fix failed: %w", err)
+		}
+		return nil
+	case "-fix--all":
+		if err := client.FixBMPInfo(""); err != nil {
+			return fmt.Errorf("bili_bmpinfo_fix failed: %w", err)
+		}
+		return nil
+	case "-download":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: bilig -download [url] [title]")
+		}
+		if err := client.AudioDownload(args[1], args[2]); err != nil {
+			return fmt.Errorf("bili_audio_download failed: %w", err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown command: %s", args[0])
 	}
 }

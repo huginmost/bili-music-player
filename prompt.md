@@ -37,38 +37,63 @@
 7. 写一个函数func getNestedString(data map[string]any, keys ...string) (string, bool), 用于获取json数据的元素信息
 
 8. GetUGCSeasonTitle(defaultISPath) 输出标题：
-   
+
    - 优先尝试 ParseJSON + GetNestedString(jsInfo, "ugc_season", "title")
    - 如果 is.json 不是严格 JSON，就回退到原文正则提取 ugc_season.title
 
-9. 函数**bili_get_bmpinfo**, 获取**bili_get_is**返回的**json数据**，然后解析数据，获取数据中的(对应python格式) **['ugc_season'][0]['episodes']** (数组)，然后对**episodes**遍历，获取**episodes[i]**中的title, pic, bvid; 创建新的我自己的json数据：```{plinfo[{"title":..., "pic": ..., ......}]}``` 然后输出到bmpinfo.json中
+9. 函数**bili_get_bmpinfo**
+    - 获取**bili_get_is**返回的**json数据**，然后解析数据，获取数据中的(对应python格式) **['ugc_season'][0]['episodes']** (数组)
+    - 对**episodes**遍历，获取**episodes[i]**中的title, pic, bvid, audio(暂时留空, 供**bili_bmpinfo_fix**使用)
+    - 若bmpinfo.json不存在, 则创建新的我自己的json数据：```{plinfo[{"title":..., "pic": ..., ......}]}``` 然后输出到bmpinfo.json中
+    - 若bmpinfo.json存在, 则不去替换bmpinfo.json已经存在的bv数据
 
 10. 函数**bili_get_audio**, 读pi.json数据, 先得到```pi['data']['dash']['audio']```数组**audio_info**, 对其进行遍历, 返回**audio_info['bandwidth']**(整数型)值最大的那一项的audio_info['baseUrl']
 
 11. 函数**bili_audio_download**, 接收参数**url**和**file_path**, 下载url的二进制文件存储到file_path, 下载时记得带
 ```"origin": "https://www.bilibili.com"``` 否则会被拒绝访问, 访问成功则开始下载
+
+12. 函数**bili_bmpinfo_fix**, 接收参数**bv**, 读取**bmpinfo.json**
+    - bv号不为空, 对其中的每个bvid数据进行遍历查找, 若匹配，则bili_get_pi(bv), url = bili_get_audio, 写入**bmpinfo.json**, 把对应的留空的audio填上"audio":url
+    - 若bv号为空, 则读入**bmpinfo.json**, 遍历每个bvid数据（遍历延迟2秒），然后将所有的bv号都填上对应的"audio":url
+
 ---
 
 ### 待完成：
-
 
 完成之后做**main**任务
 
 #### main：
 
-写函数**main**：
+函数**main**：
 1. **bili_init**
 2. 输出**bili_try**的返回值，若为**false**则返回
 3. **bili_get_pi(BV1oU1jBXEN8, pi.json)**, **bili_get_is(BV1oU1jBXEN8, is.json)**
 4. 输出**GetUGCSeasonTitle(is.json)**的内容
 5. **bili_get_bmpinfo(is.json)** 导出 **bmpinfo.json**
-6. url = bili_get_audio(pi.json), 输出url, bili_audio_download(url, test.m4a)
+6. bili_bmpinfo_fix(bv留空)
 7. 结束
 
-2. 生成可执行文件 **bilig.exe**
-
+2. 生成可执行文件 **biliTest.exe**
+3. 生成命令行文件 **bilig.exe**
 ---
-
+### 命令行：
+静默执行：**bili_init** 
+1. bilig -try
+    - 执行**bili_try**
+    - 输出(可选)**[true, false]**
+2. bilig -get [bv]
+    - 执行**bili_get_pi(bv)**
+    - 执行**bili_get_is(bv)**
+    - 执行 bili_get_bmpinfo
+4. bilig --title
+    - 输出 **GetUGCSeasonTitle**
+5. bilig -fix [bv]
+    - 执行**bili_bmpinfo_fix(bv)**
+5. bilig -fix--all
+    - 执行**bili_bmpinfo_fix(bv留空)** 
+6. bilig -download [url] [title]
+    - 执行**bili_audio_download(url, title)** 
+---
 ### 修正项：
 
 ---
@@ -79,3 +104,5 @@
 2. 有什么不好判断的信息可以先问我
 3. 我的仓库已经创建好：**git@github.com:huginmost/bili-music-player.git**，可以建立分支测试，我确定可用后再让你合并
 4. 可以设置全局变量控制is.json或pl.json的路径名，我写出来只是为了方便理解，但其实不用加到函数(如**GetUGCSeasonTitle**、**bili_get_bmpinfo**等)的参数中去，真实调用时直接就是GetUGCSeasonTitle() bili_get_bmpinfo()等
+
+

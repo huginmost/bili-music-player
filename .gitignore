@@ -5,6 +5,7 @@
 
 LRCGET
 
-bilig.exe
+*.exe
 
 *.json
+*.m4a
