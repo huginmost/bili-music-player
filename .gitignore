@@ -1,0 +1,8 @@
+.gocache/
+.gomodcache/
+.gotmp/
+.testdata/
+
+LRCGET
+
+bilig.exe
