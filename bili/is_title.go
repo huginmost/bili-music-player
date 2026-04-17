@@ -10,15 +10,15 @@ var ugcSeasonTitlePattern = regexp.MustCompile(`(?s)"ugc_season"\s*:\s*\{.*?"tit
 
 // GetUGCSeasonTitle tries to read ugc_season.title from a saved initial-state file.
 // It prefers parsed JSON and falls back to raw-text extraction when the file is not strict JSON.
-func (b *Bili) GetUGCSeasonTitle(inputPath string) (string, error) {
-	jsInfo, _, err := b.ParseJSON(inputPath)
+func (b *Bili) GetUGCSeasonTitle() (string, error) {
+	jsInfo, _, err := b.ParseJSON(InitialStatePath)
 	if err == nil {
 		if title, ok := b.GetNestedString(jsInfo, "ugc_season", "title"); ok {
 			return title, nil
 		}
 	}
 
-	raw, readErr := os.ReadFile(inputPath)
+	raw, readErr := os.ReadFile(InitialStatePath)
 	if readErr != nil {
 		if err != nil {
 			return "", fmt.Errorf("parse failed: %v; read failed: %v", err, readErr)

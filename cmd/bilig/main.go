@@ -36,9 +36,19 @@ func main() {
 		log.Fatalf("bili_get_is failed: %v", err)
 	}
 
-	title, err := client.GetUGCSeasonTitle(defaultISPath)
+	title, err := client.GetUGCSeasonTitle()
 	if err != nil {
 		log.Fatalf("get title failed: %v", err)
 	}
 	fmt.Println(title)
+
+	if _, err := client.GetBMPInfo(); err != nil {
+		log.Fatalf("bili_get_bmpinfo failed: %v", err)
+	}
+
+	audioURL, err := client.GetAudio()
+	if err != nil {
+		log.Fatalf("bili_get_audio failed: %v", err)
+	}
+	fmt.Println(audioURL)
 }

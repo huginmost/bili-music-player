@@ -12,13 +12,13 @@
 
 ### 已完成：
 
-1. 创建类：**bili**
+1. 类：**bili**
 
-2. 写一个函数**bili_init**, 存入**cookie**
+2. 函数**bili_init**, 存入**cookie**
 
-3. 写一个函数**bili_try**, 尝试访问 **https://www.bilibili.com/**, 访问成功返回**true**, 失败返回**false**
+3. 函数**bili_try**, 尝试访问 **https://www.bilibili.com/**, 访问成功返回**true**, 失败返回**false**
 
-4. 写一个函数**bili_get_pi**, 接收一个文本参数如 **BV1oU1jBXEN8** 和另一个文本参数如 **pi.json**, 然后访问 **https://www.bilibili.com/video/BV1oU1jBXEN8**, 获取其 **response**, 然后用正则匹配**...**处的内容：
+4. 函数**bili_get_pi**, 接收一个文本参数如 **BV1oU1jBXEN8** 和另一个文本参数如 **pi.json**, 然后访问 **https://www.bilibili.com/video/BV1oU1jBXEN8** , 获取其 **response**, 然后用正则匹配**...**处的内容：
    
    ```
        <script>
@@ -30,9 +30,9 @@
    
    获取到后返回文本数据，写入本地文件**pi.json**中
 
-5. 写一个函数**bili_js**, 接收文本参数 如 **pi.json**, 读入**pi.json**然后将其**json**格式化, 获取其**json**格式化的信息以便后续调用
+5. 函数**bili_get_is**, 与**bili_get_pi**相似, 只不过把 ```window.__playinfo__``` 换成 ```window.__INITIAL_STATE__```
 
-6. 写一个函数**bili_get_is**, 与**bili_get_pi**相似, 只不过把 ```window.__playinfo__``` 换成 ```window.__INITIAL_STATE__```
+6. 函数**bili_js**, 接收文本参数 如 **pi.json**, 读入**pi.json**然后将其**json**格式化, 获取其**json**格式化的信息以便后续调用
 
 7. 写一个函数func getNestedString(data map[string]any, keys ...string) (string, bool), 用于获取json数据的元素信息
 
@@ -41,17 +41,26 @@
    - 优先尝试 ParseJSON + GetNestedString(jsInfo, "ugc_season", "title")
    - 如果 is.json 不是严格 JSON，就回退到原文正则提取 ugc_season.title
 
+9. 函数**bili_get_bmpinfo**, 获取**bili_get_is**返回的**json数据**，然后解析数据，获取数据中的(对应python格式) **['ugc_season'][0]['episodes']** (数组)，然后对**episodes**遍历，获取**episodes[i]**中的title, pic, bvid; 创建新的我自己的json数据：```{plinfo[{"title":..., "pic": ..., ......}]}``` 然后输出到bmpinfo.json中
+
+10. 函数**bili_get_audio**, 读pi.json数据, 得到```pi['data']['dash']['audio'][0]['baseUrl']```并返回
 ---
 
 ### 待完成：
 
-无
 
 完成之后做**main**任务
 
 #### main：
 
-1. 写函数**main**, 先**bili_init**, 然后输出**bili_try**的返回值，若为**true**则**bili_get_pi(BV1oU1jBXEN8, pi.json)**, **bili_get_is(BV1oU1jBXEN8, is.json)**, 然后输出**GetNestedString(jsInfo, "ugc_season", "title")**的内容, 结束
+写函数**main**：
+1. **bili_init**
+2. 输出**bili_try**的返回值，若为**false**则返回
+3. **bili_get_pi(BV1oU1jBXEN8, pi.json)**, **bili_get_is(BV1oU1jBXEN8, is.json)**
+4. 输出**GetUGCSeasonTitle(is.json)**的内容
+5. **bili_get_bmpinfo(is.json)** 导出 **bmpinfo.json**
+6. 输出**bili_get_audio(pi.json)**
+7. 结束
 
 2. 生成可执行文件 **bilig.exe**
 
@@ -66,3 +75,4 @@
 1. 代码不要写在单个文件中，注意分好类，提高代码复用性与可阅读性
 2. 有什么不好判断的信息可以先问我
 3. 我的仓库已经创建好：**git@github.com:huginmost/bili-music-player.git**，可以建立分支测试，我确定可用后再让你合并
+4. 可以设置全局变量控制is.json或pl.json的路径名，我写出来只是为了方便理解，但其实不用加到函数(如**GetUGCSeasonTitle**、**bili_get_bmpinfo**等)的参数中去，真实调用时直接就是GetUGCSeasonTitle() bili_get_bmpinfo()等
