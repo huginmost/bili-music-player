@@ -1,6 +1,8 @@
 package bili
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -77,7 +79,7 @@ func TestGetBMPInfoWritesPlaylist(t *testing.T) {
 	}
 }
 
-func TestGetAudioReturnsFirstBaseURL(t *testing.T) {
+func TestGetAudioReturnsHighestBandwidthBaseURL(t *testing.T) {
 	client, err := New("")
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
@@ -91,7 +93,7 @@ func TestGetAudioReturnsFirstBaseURL(t *testing.T) {
 	PlayInfoPath = filepath.Join(dir, "pi.json")
 	defer func() { PlayInfoPath = oldPIPath }()
 
-	content := `{"data":{"dash":{"audio":[{"baseUrl":"https://example.com/audio.m4a"}]}}}`
+	content := `{"data":{"dash":{"audio":[{"baseUrl":"https://example.com/low.m4a","bandwidth":100},{"baseUrl":"https://example.com/high.m4a","bandwidth":200}]}}}`
 	if err := os.WriteFile(PlayInfoPath, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
@@ -101,7 +103,44 @@ func TestGetAudioReturnsFirstBaseURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAudio returned error: %v", err)
 	}
-	if audioURL != "https://example.com/audio.m4a" {
+	if audioURL != "https://example.com/high.m4a" {
 		t.Fatalf("expected audio URL, got %q", audioURL)
+	}
+}
+
+func TestAudioDownloadWritesFile(t *testing.T) {
+	client, err := New("")
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Origin"); got != "https://www.bilibili.com" {
+			t.Fatalf("expected Origin header, got %q", got)
+		}
+		if got := r.Header.Get("Referer"); got != "https://www.bilibili.com/" {
+			t.Fatalf("expected Referer header, got %q", got)
+		}
+		_, _ = w.Write([]byte("audio-data"))
+	}))
+	defer server.Close()
+
+	dir := filepath.Join("..", ".testdata", "extract-"+time.Now().Format("20060102150405")+"-download")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+	outputPath := filepath.Join(dir, "test.m4a")
+	defer os.Remove(outputPath)
+
+	if err := client.AudioDownload(server.URL, outputPath); err != nil {
+		t.Fatalf("AudioDownload returned error: %v", err)
+	}
+
+	got, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	if string(got) != "audio-data" {
+		t.Fatalf("expected downloaded content, got %q", string(got))
 	}
 }

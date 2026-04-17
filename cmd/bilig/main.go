@@ -12,6 +12,7 @@ const (
 	defaultBVID   = "BV1oU1jBXEN8"
 	defaultPIPath = "pi.json"
 	defaultISPath = "is.json"
+	defaultAudio  = "test.m4a"
 )
 
 func main() {
@@ -51,4 +52,8 @@ func main() {
 		log.Fatalf("bili_get_audio failed: %v", err)
 	}
 	fmt.Println(audioURL)
+
+	if err := client.AudioDownload(audioURL, defaultAudio); err != nil {
+		log.Fatalf("bili_audio_download failed: %v", err)
+	}
 }

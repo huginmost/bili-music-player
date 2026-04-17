@@ -43,7 +43,10 @@
 
 9. 函数**bili_get_bmpinfo**, 获取**bili_get_is**返回的**json数据**，然后解析数据，获取数据中的(对应python格式) **['ugc_season'][0]['episodes']** (数组)，然后对**episodes**遍历，获取**episodes[i]**中的title, pic, bvid; 创建新的我自己的json数据：```{plinfo[{"title":..., "pic": ..., ......}]}``` 然后输出到bmpinfo.json中
 
-10. 函数**bili_get_audio**, 读pi.json数据, 得到```pi['data']['dash']['audio'][0]['baseUrl']```并返回
+10. 函数**bili_get_audio**, 读pi.json数据, 先得到```pi['data']['dash']['audio']```数组**audio_info**, 对其进行遍历, 返回**audio_info['bandwidth']**(整数型)值最大的那一项的audio_info['baseUrl']
+
+11. 函数**bili_audio_download**, 接收参数**url**和**file_path**, 下载url的二进制文件存储到file_path, 下载时记得带
+```"origin": "https://www.bilibili.com"``` 否则会被拒绝访问, 访问成功则开始下载
 ---
 
 ### 待完成：
@@ -59,7 +62,7 @@
 3. **bili_get_pi(BV1oU1jBXEN8, pi.json)**, **bili_get_is(BV1oU1jBXEN8, is.json)**
 4. 输出**GetUGCSeasonTitle(is.json)**的内容
 5. **bili_get_bmpinfo(is.json)** 导出 **bmpinfo.json**
-6. 输出**bili_get_audio(pi.json)**
+6. url = bili_get_audio(pi.json), 输出url, bili_audio_download(url, test.m4a)
 7. 结束
 
 2. 生成可执行文件 **bilig.exe**
