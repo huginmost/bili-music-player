@@ -24,3 +24,8 @@ func (b *Bili) GetInitialState(bvid, outputPath string) (string, error) {
 func (b *Bili) ParseJSON(inputPath string) (map[string]any, string, error) {
 	return b.bili_js(inputPath)
 }
+
+// GetNestedString is the Bili wrapper around the package helper.
+func (b *Bili) GetNestedString(data map[string]any, keys ...string) (string, bool) {
+	return GetNestedString(data, keys...)
+}

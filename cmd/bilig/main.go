@@ -35,4 +35,10 @@ func main() {
 	if _, err := client.GetInitialState(defaultBVID, defaultISPath); err != nil {
 		log.Fatalf("bili_get_is failed: %v", err)
 	}
+
+	title, err := client.GetUGCSeasonTitle(defaultISPath)
+	if err != nil {
+		log.Fatalf("get title failed: %v", err)
+	}
+	fmt.Println(title)
 }
