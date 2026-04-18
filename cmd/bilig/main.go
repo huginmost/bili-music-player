@@ -47,6 +47,17 @@ func run(args []string, stdout io.Writer) error {
 			return fmt.Errorf("bili_get_bmpinfo failed: %w", err)
 		}
 		return nil
+	case "-lget":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: bilig -lget [ml]")
+		}
+		if _, err := client.GetListInitialState(args[1], bili.InitialStatePath); err != nil {
+			return fmt.Errorf("bili_lget_is failed: %w", err)
+		}
+		if _, err := client.GetListBMPInfo(); err != nil {
+			return fmt.Errorf("bili_lget_bmpinfo failed: %w", err)
+		}
+		return nil
 	case "--title":
 		title, err := client.GetUGCSeasonTitle()
 		if err != nil {

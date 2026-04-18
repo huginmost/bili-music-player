@@ -1,6 +1,9 @@
 package bili
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 func (b *Bili) fillBMPInfoAudio(item *BMPInfoItem) error {
 	if _, err := b.GetPlayInfo(item.BVID, PlayInfoPath); err != nil {
@@ -24,28 +27,34 @@ func (b *Bili) FixBMPInfo(bv string) error {
 	}
 
 	if bv != "" {
-		for i := range payload.PLInfo {
-			if payload.PLInfo[i].BVID != bv {
-				continue
-			}
+		for title := range payload {
+			for i := range payload[title] {
+				if payload[title][i].BVID != bv {
+					continue
+				}
 
-			if err := b.fillBMPInfoAudio(&payload.PLInfo[i]); err != nil {
-				return err
-			}
+				if err := b.fillBMPInfoAudio(&payload[title][i]); err != nil {
+					return err
+				}
 
-			return b.writeBMPInfo(payload)
+				return b.writeBMPInfo(payload)
+			}
 		}
 
-		return nil
+		return fmt.Errorf("bvid %s not found in bmpinfo.json", bv)
 	}
 
-	for i := range payload.PLInfo {
-		if i > 0 {
-			time.Sleep(2 * time.Second)
-		}
+	first := true
+	for title := range payload {
+		for i := range payload[title] {
+			if !first {
+				time.Sleep(2 * time.Second)
+			}
+			first = false
 
-		if err := b.fillBMPInfoAudio(&payload.PLInfo[i]); err != nil {
-			return err
+			if err := b.fillBMPInfoAudio(&payload[title][i]); err != nil {
+				return err
+			}
 		}
 	}
 

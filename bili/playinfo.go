@@ -16,13 +16,12 @@ const defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 var playInfoPattern = regexp.MustCompile(`(?s)window\.__playinfo__\s*=\s*(\{.*?\})\s*</script>`)
 var initialStatePattern = regexp.MustCompile(`(?s)window\.__INITIAL_STATE__\s*=\s*(\{.*?\})\s*;\s*\(function`)
 
-func (b *Bili) fetchVideoPage(bvid string) (string, error) {
+func (b *Bili) fetchPage(pageURL string) (string, error) {
 	if b == nil {
 		return "", fmt.Errorf("bili is nil")
 	}
 
-	videoURL := fmt.Sprintf("https://www.bilibili.com/video/%s", bvid)
-	req, err := http.NewRequest(http.MethodGet, videoURL, nil)
+	req, err := http.NewRequest(http.MethodGet, pageURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -46,6 +45,16 @@ func (b *Bili) fetchVideoPage(bvid string) (string, error) {
 	}
 
 	return string(body), nil
+}
+
+func (b *Bili) fetchVideoPage(bvid string) (string, error) {
+	videoURL := fmt.Sprintf("https://www.bilibili.com/video/%s", bvid)
+	return b.fetchPage(videoURL)
+}
+
+func (b *Bili) fetchListPage(listID string) (string, error) {
+	listURL := fmt.Sprintf("https://www.bilibili.com/list/%s", listID)
+	return b.fetchPage(listURL)
 }
 
 func extractScriptJSON(body string, pattern *regexp.Regexp, name string) (string, error) {
@@ -90,6 +99,44 @@ func (b *Bili) bili_get_pi(bvid, outputPath string) (string, error) {
 // bili_get_is fetches a Bilibili video page, extracts window.__INITIAL_STATE__, and writes it to file.
 func (b *Bili) bili_get_is(bvid, outputPath string) (string, error) {
 	body, err := b.fetchVideoPage(bvid)
+	if err != nil {
+		return "", err
+	}
+
+	initialState, err := extractScriptJSON(body, initialStatePattern, "window.__INITIAL_STATE__")
+	if err != nil {
+		return "", err
+	}
+
+	if err := writeJSONFile(outputPath, initialState); err != nil {
+		return "", err
+	}
+
+	return initialState, nil
+}
+
+// bili_mget_pi fetches a Bilibili list page, extracts window.__playinfo__, and writes it to file.
+func (b *Bili) bili_mget_pi(listID, outputPath string) (string, error) {
+	body, err := b.fetchListPage(listID)
+	if err != nil {
+		return "", err
+	}
+
+	playInfo, err := extractScriptJSON(body, playInfoPattern, "window.__playinfo__")
+	if err != nil {
+		return "", err
+	}
+
+	if err := writeJSONFile(outputPath, playInfo); err != nil {
+		return "", err
+	}
+
+	return playInfo, nil
+}
+
+// bili_mget_is fetches a Bilibili list page, extracts window.__INITIAL_STATE__, and writes it to file.
+func (b *Bili) bili_mget_is(listID, outputPath string) (string, error) {
+	body, err := b.fetchListPage(listID)
 	if err != nil {
 		return "", err
 	}

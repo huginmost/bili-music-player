@@ -139,6 +139,57 @@ func extractStringForKey(raw, key string) (string, error) {
 	return "", fmt.Errorf("%s string not terminated", key)
 }
 
+func extractLiteralForKey(raw, key string) (string, error) {
+	start, err := findKeyValueStart(raw, key)
+	if err != nil {
+		return "", err
+	}
+
+	for start < len(raw) && (raw[start] == ' ' || raw[start] == '\n' || raw[start] == '\r' || raw[start] == '\t') {
+		start++
+	}
+	if start >= len(raw) {
+		return "", fmt.Errorf("%s value not found", key)
+	}
+
+	end := start
+	inString := false
+	escaped := false
+	for end < len(raw) {
+		ch := raw[end]
+		if inString {
+			if escaped {
+				escaped = false
+				end++
+				continue
+			}
+			if ch == '\\' {
+				escaped = true
+				end++
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
+			end++
+			continue
+		}
+
+		if ch == '"' {
+			inString = true
+			end++
+			continue
+		}
+
+		if ch == ',' || ch == '}' || ch == ']' || ch == '\n' || ch == '\r' {
+			break
+		}
+		end++
+	}
+
+	return strings.TrimSpace(raw[start:end]), nil
+}
+
 func splitTopLevelObjects(rawArray string) ([]string, error) {
 	rawArray = strings.TrimSpace(rawArray)
 	if len(rawArray) < 2 || rawArray[0] != '[' || rawArray[len(rawArray)-1] != ']' {

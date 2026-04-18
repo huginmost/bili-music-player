@@ -6,9 +6,13 @@
 
 ---
 
-### 当前进度：正在编写后端
+## 当前进度：正在编写后端
 
 ---
+
+
+
+## 后端：
 
 ### 已完成：
 
@@ -40,12 +44,15 @@
 
    - 优先尝试 ParseJSON + GetNestedString(jsInfo, "ugc_season", "title")
    - 如果 is.json 不是严格 JSON，就回退到原文正则提取 ugc_season.title
+   - 没有则输出空
 
 9. 函数**bili_get_bmpinfo**
-    - 获取**bili_get_is**返回的**json数据**，然后解析数据，获取数据中的(对应python格式) **['ugc_season'][0]['episodes']** (数组)
+    - 读入**bili_get_is**返回的**json数据: is.json**，然后解析数据，获取数据中的(对应python格式) **is.json['ugc_season'][0]['episodes']** (数组)
     - 对**episodes**遍历，获取**episodes[i]**中的title, pic, bvid, audio(暂时留空, 供**bili_bmpinfo_fix**使用)
-    - 若bmpinfo.json不存在, 则创建新的我自己的json数据：```{plinfo[{"title":..., "pic": ..., ......}]}``` 然后输出到bmpinfo.json中
-    - 若bmpinfo.json存在, 则不去替换bmpinfo.json已经存在的bv数据
+    - 记录 **ugcTitle = GetUGCSeasonTitle**; **bvid = is.json['bvid']**
+    - 若**bmpinfo.json**不存在, 则创建新的我自己的json数据：```{ugcTitle - bvid{"title":..., "pic": ..., ......}]}```(当中的ugcTitle和bvid是变量名) 然后输出到**bmpinfo.json**中
+    - 若**bmpinfo.json**存在, 且**bmpinfo.json**不存在**ugcTitle**, 则向**bmpinfo.json**添加新的ugcTitle项, 否则返回即可
+
 
 10. 函数**bili_get_audio**, 读pi.json数据, 先得到```pi['data']['dash']['audio']```数组**audio_info**, 对其进行遍历, 返回**audio_info['bandwidth']**(整数型)值最大的那一项的audio_info['baseUrl']
 
@@ -53,12 +60,29 @@
 ```"origin": "https://www.bilibili.com"``` 否则会被拒绝访问, 访问成功则开始下载
 
 12. 函数**bili_bmpinfo_fix**, 接收参数**bv**, 读取**bmpinfo.json**
-    - bv号不为空, 对其中的每个bvid数据进行遍历查找, 若匹配，则bili_get_pi(bv), url = bili_get_audio, 写入**bmpinfo.json**, 把对应的留空的audio填上"audio":url
+    - bv号不为空, 对其中的每个标题的每个bvid数据进行遍历查找, 若匹配，则bili_get_pi(bv), url = bili_get_audio, 写入**bmpinfo.json**, 把对应的留空的audio填上"audio":url
     - 若bv号为空, 则读入**bmpinfo.json**, 遍历每个bvid数据（遍历延迟2秒），然后将所有的bv号都填上对应的"audio":url
+
+13. 函数**bili_lget_is** 和 **bili_lget_pi** 
+    - 与**bili_get_is**和**bili_get_pi**相似, 只不过参数变成了**ml3888553754**
+    - 访问地址变成了**https://www.bilibili.com/list/ml3888553754**, response中同样有```window.__playinfo__``` 和 ```window.__INITIAL_STATE__```
+    - 与**GetUGCSeasonTitle**类似, 写一个函数**GetListTitle** 获取**is.json**中的```['mediaListInfo']['title']```, 失败返回空
+
+14. 函数**bili_lget_bmpinfo**
+    - 读入**is.json**，然后解析数据，获取数据中的(对应python格式) **is.json['resourceList']** (数组)
+    - 对**resourceList**遍历，获取**resourceList[i]**中的title, cover, bvid, audio(暂时留空, 供**bili_bmpinfo_fix**使用)
+    - 记录 ```listTitle = GetListTitle; listid = is.json['playlist']['id']```
+    - 若**bmpinfo.json**不存在, 则创建新的我自己的json数据：```{listTitle - listid[{"title":..., "pic": ..., ......}]}```(当中的listTitle和listid是变量名) 然后输出到**bmpinfo.json**中
+    - 若**bmpinfo.json**存在, 且**bmpinfo.json**不存在**listTitle**, 则向**bmpinfo.json**添加新的listTitle项, 否则返回即可
 
 ---
 
 ### 待完成：
+
+
+
+
+
 
 完成之后做**main**任务
 
@@ -84,7 +108,7 @@
 2. bilig -get [bv]
     - 执行**bili_get_pi(bv)**
     - 执行**bili_get_is(bv)**
-    - 执行 bili_get_bmpinfo
+    - 执行**bili_get_bmpinfo**
 4. bilig --title
     - 输出 **GetUGCSeasonTitle**
 5. bilig -fix [bv]
@@ -93,6 +117,10 @@
     - 执行**bili_bmpinfo_fix(bv留空)** 
 6. bilig -download [url] [title]
     - 执行**bili_audio_download(url, title)** 
+7. bilig -lget [ml]
+    - 执行**bili_lget_is(ml)**
+    - 执行**bili_lget_bmpinfo**
+
 ---
 ### 修正项：
 

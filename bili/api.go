@@ -20,6 +20,16 @@ func (b *Bili) GetInitialState(bvid, outputPath string) (string, error) {
 	return b.bili_get_is(bvid, outputPath)
 }
 
+// GetListPlayInfo is the exported wrapper for bili_mget_pi.
+func (b *Bili) GetListPlayInfo(listID, outputPath string) (string, error) {
+	return b.bili_mget_pi(listID, outputPath)
+}
+
+// GetListInitialState is the exported wrapper for bili_mget_is.
+func (b *Bili) GetListInitialState(listID, outputPath string) (string, error) {
+	return b.bili_mget_is(listID, outputPath)
+}
+
 // ParseJSON is the exported wrapper for bili_js.
 func (b *Bili) ParseJSON(inputPath string) (map[string]any, string, error) {
 	return b.bili_js(inputPath)

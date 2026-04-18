@@ -60,6 +60,30 @@ func TestInitialStatePatternExtractsJSON(t *testing.T) {
 	}
 }
 
+func TestListPlayInfoPatternExtractsJSON(t *testing.T) {
+	html := `
+	<html>
+		<body>
+			<script>
+				window.__playinfo__ = {
+					"mediaListInfo": {
+						"title": "list-title"
+					}
+				}
+			</script>
+		</body>
+	</html>`
+
+	matches := playInfoPattern.FindStringSubmatch(html)
+	if len(matches) < 2 {
+		t.Fatalf("expected playinfo JSON to be extracted from list page")
+	}
+
+	if matches[1] == "" {
+		t.Fatalf("expected non-empty JSON match")
+	}
+}
+
 func TestBiliJSParsesAndFormatsJSON(t *testing.T) {
 	client, err := New("")
 	if err != nil {
