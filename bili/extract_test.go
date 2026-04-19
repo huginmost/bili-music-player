@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -89,9 +90,9 @@ func TestGetBMPInfoWritesPlaylist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadBMPInfo returned error: %v", err)
 	}
-	group, ok := payload["playlist - BV1"]
+	group, ok := payload["playlist"]
 	if !ok {
-		t.Fatalf("expected merged playlist key in payload: %+v", payload)
+		t.Fatalf("expected playlist key in payload: %+v", payload)
 	}
 	if len(group) != 2 {
 		t.Fatalf("expected 2 payload items, got %d", len(group))
@@ -101,12 +102,30 @@ func TestGetBMPInfoWritesPlaylist(t *testing.T) {
 	}
 }
 
+func TestGetBMPInfoReturnsNilWhenUGCSeasonMissing(t *testing.T) {
+	client := newTestClient(t)
+	withTempPaths(t)
+
+	content := `{"videoData":{"title":"no-season","bvid":"BV1"}}`
+	if err := os.WriteFile(InitialStatePath, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	items, err := client.GetBMPInfo()
+	if err != nil {
+		t.Fatalf("GetBMPInfo returned error: %v", err)
+	}
+	if items != nil {
+		t.Fatalf("expected nil items when ugc_season is missing, got %+v", items)
+	}
+}
+
 func TestGetBMPInfoKeepsExistingGroups(t *testing.T) {
 	client := newTestClient(t)
 	withTempPaths(t)
 
 	existing := BMPInfoPayload{
-		"old-playlist - OLD": []BMPInfoItem{
+		"old-playlist": []BMPInfoItem{
 			{Title: "old-song", Pic: "old-pic", BVID: "OLD", Audio: ""},
 		},
 	}
@@ -134,11 +153,11 @@ func TestGetBMPInfoKeepsExistingGroups(t *testing.T) {
 	if len(payload) != 2 {
 		t.Fatalf("expected 2 playlist groups, got %d", len(payload))
 	}
-	if payload["old-playlist - OLD"][0].BVID != "OLD" {
+	if payload["old-playlist"][0].BVID != "OLD" {
 		t.Fatalf("expected old playlist to be preserved, got %+v", payload["old-playlist"])
 	}
-	if payload["new-playlist - BV1"][0].BVID != "BV1" {
-		t.Fatalf("expected new playlist to be added, got %+v", payload["new-playlist - BV1"])
+	if payload["new-playlist"][0].BVID != "BV1" {
+		t.Fatalf("expected new playlist to be added, got %+v", payload["new-playlist"])
 	}
 }
 
@@ -262,11 +281,29 @@ func TestReadBMPInfoAllowsEmptyFile(t *testing.T) {
 	}
 }
 
+func TestAudioURLExpiredReturnsFalseBeforeDeadline(t *testing.T) {
+	now := time.Unix(1000, 0)
+	audioURL := "https://example.com/audio.m4s?deadline=" + strconv.FormatInt(now.Unix()+60, 10)
+
+	if audioURLExpired(audioURL, now) {
+		t.Fatalf("expected audio URL to still be valid")
+	}
+}
+
+func TestAudioURLExpiredReturnsTrueAfterDeadline(t *testing.T) {
+	now := time.Unix(1000, 0)
+	audioURL := "https://example.com/audio.m4s?deadline=" + strconv.FormatInt(now.Unix()-60, 10)
+
+	if !audioURLExpired(audioURL, now) {
+		t.Fatalf("expected audio URL to be expired")
+	}
+}
+
 func TestGetListBMPInfoWritesGroupedList(t *testing.T) {
 	client := newTestClient(t)
 	withTempPaths(t)
 
-	initialStateContent := `{"mediaListInfo":{"title":"list-title"},"playlist":{"id":12345},"resourceList":[{"title":"song-1","cover":"cover-1","bvid":"BV1"},{"title":"song-2","cover":"cover-2","bvid":"BV2"}]}`
+	initialStateContent := `{"mediaListInfo":{"title":"list-title"},"playlist":{"id":12345},"resourceList":[{"title":"song-1","cover":"//cover-1","bvid":"BV1"},{"title":"song-2","cover":"//cover-2","bvid":"BV2"}]}`
 	if err := os.WriteFile(InitialStatePath, []byte(initialStateContent), 0o644); err != nil {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
@@ -278,12 +315,15 @@ func TestGetListBMPInfoWritesGroupedList(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(items))
 	}
+	if items[0].Pic != "http://cover-1" {
+		t.Fatalf("expected list cover to be normalized, got %+v", items[0])
+	}
 
 	payload, err := client.ReadBMPInfo()
 	if err != nil {
 		t.Fatalf("ReadBMPInfo returned error: %v", err)
 	}
-	if payload["list-title - 12345"][0].BVID != "BV1" {
-		t.Fatalf("expected list items to store under merged key, got %+v", payload["list-title - 12345"])
+	if payload["list-title"][0].BVID != "BV1" {
+		t.Fatalf("expected list items to store under list title, got %+v", payload["list-title"])
 	}
 }

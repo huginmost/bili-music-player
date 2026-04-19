@@ -6,6 +6,10 @@ import (
 )
 
 func (b *Bili) fillBMPInfoAudio(item *BMPInfoItem) error {
+	if !audioURLExpired(item.Audio, time.Now()) {
+		return nil
+	}
+
 	if _, err := b.GetPlayInfo(item.BVID, PlayInfoPath); err != nil {
 		return err
 	}

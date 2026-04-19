@@ -52,10 +52,6 @@ func (b *Bili) writeBMPInfo(payload BMPInfoPayload) error {
 	return os.WriteFile(BMPInfoPath, formatted, 0o644)
 }
 
-func buildBMPInfoKey(title, id string) string {
-	return fmt.Sprintf("%s - %s", title, id)
-}
-
 func (b *Bili) readInitialStateString(key string) (string, error) {
 	jsInfo, _, err := b.ParseJSON(InitialStatePath)
 	if err == nil {
@@ -83,6 +79,14 @@ func (b *Bili) readInitialStateString(key string) (string, error) {
 	return value, nil
 }
 
+func normalizeBMPInfoPic(pic string) string {
+	if strings.HasPrefix(pic, "//") {
+		return "http:" + pic
+	}
+
+	return pic
+}
+
 func extractBMPInfoItemsFromArray(arrayRaw string, titleKey string, picKeys ...string) ([]BMPInfoItem, error) {
 	itemObjects, err := splitTopLevelObjects(arrayRaw)
 	if err != nil {
@@ -100,7 +104,7 @@ func extractBMPInfoItemsFromArray(arrayRaw string, titleKey string, picKeys ...s
 		for _, key := range picKeys {
 			value, picErr := extractStringForKey(obj, key)
 			if picErr == nil {
-				pic = value
+				pic = normalizeBMPInfoPic(value)
 				break
 			}
 		}
@@ -129,7 +133,7 @@ func (b *Bili) extractBMPInfoItems() ([]BMPInfoItem, error) {
 
 	ugcSeason, err := extractObjectForKey(string(raw), "ugc_season")
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 
 	sections, err := extractArrayForKey(ugcSeason, "sections")
@@ -242,37 +246,30 @@ func (b *Bili) readPlaylistID() (string, error) {
 }
 
 // GetBMPInfo reads the saved initial-state data, extracts the first section's episodes,
-// and writes grouped playlist data to bmpinfo.json keyed by "ugc title - bvid".
+// and writes grouped playlist data to bmpinfo.json keyed by ugc title.
 func (b *Bili) GetBMPInfo() ([]BMPInfoItem, error) {
+	items, err := b.extractBMPInfoItems()
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		return nil, nil
+	}
+
 	ugcTitle, err := b.GetUGCSeasonTitle()
 	if err != nil {
 		return nil, err
 	}
 
-	currentBVID, err := b.readInitialStateString("bvid")
-	if err != nil {
-		return nil, err
-	}
-
-	items, err := b.extractBMPInfoItems()
-	if err != nil {
-		return nil, err
-	}
-
-	return b.upsertBMPInfo(buildBMPInfoKey(ugcTitle, currentBVID), items)
+	return b.upsertBMPInfo(ugcTitle, items)
 }
 
 // GetListBMPInfo reads the saved list initial-state data, extracts resourceList,
-// and writes grouped playlist data to bmpinfo.json keyed by "list title - list id".
+// and writes grouped playlist data to bmpinfo.json keyed by list title.
 func (b *Bili) GetListBMPInfo() ([]BMPInfoItem, error) {
 	listTitle := b.GetListTitle()
 	if listTitle == "" {
 		return nil, fmt.Errorf("list title not found")
-	}
-
-	listID, err := b.readPlaylistID()
-	if err != nil {
-		return nil, err
 	}
 
 	items, err := b.extractListBMPInfoItems()
@@ -280,5 +277,5 @@ func (b *Bili) GetListBMPInfo() ([]BMPInfoItem, error) {
 		return nil, err
 	}
 
-	return b.upsertBMPInfo(buildBMPInfoKey(listTitle, listID), items)
+	return b.upsertBMPInfo(listTitle, items)
 }
