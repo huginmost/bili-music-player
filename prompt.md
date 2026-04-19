@@ -75,7 +75,7 @@
     - 读入**is.json**，然后解析数据，获取数据中的(对应python格式) **is.json['resourceList']** (数组)
     - 对**resourceList**遍历，获取**resourceList[i]**中的title, cover, bvid, audio(暂时留空, 供**bili_bmpinfo_fix**使用)
     - 记录 ```listTitle = GetListTitle```
-    - 若**bmpinfo.json**不存在, 则创建新的我自己的json数据：```{listTitle[{"title":..., "pic": ..., ......}]}```(当中的listTitle和listid是变量名) 然后输出到**bmpinfo.json**中
+    - 若**bmpinfo.json**不存在listTitle元素, 则创建新的我自己的json数据：```{listTitle[{"title":..., "pic": ..., ......}]}```(当中的listTitle和listid是变量名) 然后输出到**bmpinfo.json**中
     - 这里的**pic**就是获取到的**cover**, 但是要在前面手动加上**http:**, 因为**cover**是**//**开头的
     - 若**bmpinfo.json**存在, 且**bmpinfo.json**不存在**listTitle**, 则向**bmpinfo.json**添加新的listTitle项, 否则返回即可
 
@@ -120,6 +120,7 @@
 2. 有什么不好判断的信息可以先问我
 3. 我的仓库已经创建好：**git@github.com:huginmost/bili-music-player.git**，可以建立分支测试，我确定可用后再让你合并
 4. 可以设置全局变量控制is.json或pl.json的路径名，我写出来只是为了方便理解，但其实不用加到函数(如**GetUGCSeasonTitle**、**bili_get_bmpinfo**等)的参数中去，真实调用时直接就是GetUGCSeasonTitle() bili_get_bmpinfo()等
+5. 写一个bat脚本，自动将编译出来的的文件打包进**release**文件夹中包括bmpinfo.json
 
 
 ## 前端
@@ -129,10 +130,11 @@ vue + vite
 3. 利用后端中的 **bilig -fix [bv]** 可以获取audio链接, 然后读入bmpinfo.json中的audio对音乐进行播放
 4. 后端中已完成的函数在本文档中
 5. 要求该网页音乐播放器有随机播放，顺序播放功能，以及其它基础功能（参考网页上搜的模版）
-6. 对歌曲进行预缓存，可以用队列，缓存数量在3左右，也就是除了正在播放的歌曲用-fix，播放列表中的下3首都用-fix获取了链接，保障播放下一首时能"秒反应"
+6. 对歌曲进行预缓存，可以用队列或栈，缓存数量在3左右，也就是除了正在播放的歌曲用-fix，播放列表中的下3首都用-fix获取了链接，保障播放下一首时能"秒反应"
 7. 有删除歌单功能（对bmpinfo中的某个歌单元素进行删除）和下载功能（下载某个audio）
 8. 可以多制作几个版本，我将选取最优的版本发布并使用
 9. 注意前端访问时也要带**origin**, 否则会拒绝访问
 10. 可以调整音量
-
-将编译出来的的文件打包进**release**文件夹中
+11. 随机播放的功能是生成一个队列，而且只缓存队列的前3 + 1首，保证随机播放能播放一轮所有的歌曲，而不是随机到一首歌播放好几遍但是有些歌没放过，直到所有歌曲播放完则生成新的随机队列（播放器主结构用列表，随机播放用乱序队列，上一首用历史栈。）
+12. 新增利用ui使用bilig对bmpinfo.json进行增(bilig -get/bilig -mget), 删(bilig -del)功能
+13. 音量、目前播放歌曲、播放顺序（顺序/随机）和播放列表等具有记忆功能，可以通过后端读写settings.json实现

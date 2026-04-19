@@ -27,6 +27,31 @@ export function fetchLibrary() {
   return request('/library')
 }
 
+export function fetchSettings() {
+  return request('/settings')
+}
+
+export function saveSettings(settings) {
+  return request('/settings', {
+    method: 'PUT',
+    body: JSON.stringify(settings)
+  })
+}
+
+export function importVideo(id) {
+  return request('/library/import/video', {
+    method: 'POST',
+    body: JSON.stringify({ id })
+  })
+}
+
+export function importList(id) {
+  return request('/library/import/list', {
+    method: 'POST',
+    body: JSON.stringify({ id })
+  })
+}
+
 export function refreshTrackAudio(playlistTitle, bvid) {
   return request('/tracks/refresh', {
     method: 'POST',

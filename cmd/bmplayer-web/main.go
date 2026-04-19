@@ -31,6 +31,10 @@ type downloadResponse struct {
 	FilePath string `json:"filePath"`
 }
 
+type importRequest struct {
+	ID string `json:"id"`
+}
+
 func main() {
 	client, err := bili.New(os.Getenv("BILI_COOKIE"))
 	if err != nil {
@@ -42,8 +46,11 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", server.handleHealth)
 	mux.HandleFunc("/api/library", server.handleLibrary)
+	mux.HandleFunc("/api/settings", server.handleSettings)
 	mux.HandleFunc("/api/tracks/refresh", server.handleRefreshTrack)
 	mux.HandleFunc("/api/tracks/prefetch", server.handlePrefetchTracks)
+	mux.HandleFunc("/api/library/import/video", server.handleImportVideo)
+	mux.HandleFunc("/api/library/import/list", server.handleImportList)
 	mux.HandleFunc("/api/playlists", server.handleDeletePlaylist)
 	mux.HandleFunc("/api/tracks", server.handleDeleteTrack)
 	mux.HandleFunc("/api/downloads", server.handleDownloadTrack)
@@ -101,6 +108,31 @@ func (a *app) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, payload)
 }
 
+func (a *app) handleSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		settings, err := a.client.ReadSettings()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, settings)
+	case http.MethodPut:
+		var settings bili.PlayerSettings
+		if err := decodeJSON(r, &settings); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := a.client.WriteSettings(settings); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (a *app) handleRefreshTrack(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -153,6 +185,82 @@ func (a *app) handlePrefetchTracks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, refreshed)
+}
+
+func (a *app) handleImportVideo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req importRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	bvid := strings.TrimSpace(req.ID)
+	if bvid == "" {
+		writeError(w, http.StatusBadRequest, errors.New("missing bv id"))
+		return
+	}
+
+	if _, err := a.client.GetPlayInfo(bvid, bili.PlayInfoPath); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("bili_get_pi failed: %w", err))
+		return
+	}
+	if _, err := a.client.GetInitialState(bvid, bili.InitialStatePath); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("bili_get_is failed: %w", err))
+		return
+	}
+	if _, err := a.client.GetBMPInfo(); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("bili_get_bmpinfo failed: %w", err))
+		return
+	}
+
+	payload, err := a.client.ReadBMPInfo()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (a *app) handleImportList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req importRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	listID := strings.TrimSpace(req.ID)
+	if listID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("missing list id"))
+		return
+	}
+
+	if _, err := a.client.GetListInitialState(listID, bili.InitialStatePath); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("bili_lget_is failed: %w", err))
+		return
+	}
+	if _, err := a.client.GetListBMPInfo(); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("bili_lget_bmpinfo failed: %w", err))
+		return
+	}
+
+	payload, err := a.client.ReadBMPInfo()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (a *app) handleDeletePlaylist(w http.ResponseWriter, r *http.Request) {

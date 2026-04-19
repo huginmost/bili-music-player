@@ -7,9 +7,15 @@ import {
   deleteTrack,
   downloadTrack,
   fetchLibrary,
+  fetchSettings,
+  importList,
+  importVideo,
   prefetchTrackAudio,
-  refreshTrackAudio
+  refreshTrackAudio,
+  saveSettings
 } from './api'
+
+const PREFETCH_SIZE = 3
 
 const library = ref({})
 const loading = ref(true)
@@ -24,6 +30,14 @@ const isPlaying = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
 const volume = ref(0.72)
+const importVideoID = ref('')
+const importListID = ref('')
+const importBusy = ref(false)
+const shuffleQueue = ref([])
+const historyStack = ref([])
+const settingsReady = ref(false)
+let restoreSettings = null
+let saveTimer = null
 
 const playlists = computed(() =>
   Object.entries(library.value).map(([title, tracks]) => ({
@@ -63,7 +77,6 @@ const activeTrack = computed(() => {
   if (!playlist || !playlist.tracks.length) {
     return null
   }
-
   return playlist.tracks[activeTrackIndex.value] || playlist.tracks[0]
 })
 
@@ -73,13 +86,20 @@ const upcomingTracks = computed(() => {
     return []
   }
 
+  if (playMode.value === 'shuffle') {
+    return shuffleQueue.value
+      .slice(0, PREFETCH_SIZE)
+      .map((index) => playlist.tracks[index])
+      .filter(Boolean)
+  }
+
   const result = []
-  for (let step = 1; step <= 3; step += 1) {
-    const nextIndex = computeNextIndex(step)
-    if (nextIndex === -1) {
+  for (let step = 1; step <= PREFETCH_SIZE; step += 1) {
+    const index = activeTrackIndex.value + step
+    if (index >= playlist.tracks.length) {
       break
     }
-    result.push(playlist.tracks[nextIndex])
+    result.push(playlist.tracks[index])
   }
   return result
 })
@@ -93,37 +113,134 @@ function resolveTrackIndexByBVID(bvid) {
   if (!playlist) {
     return -1
   }
-
   return playlist.tracks.findIndex((track) => track.bvid === bvid)
 }
 
-function computeNextIndex(offset = 1) {
+function syncVolume() {
+  if (audioRef.value) {
+    audioRef.value.volume = volume.value
+  }
+}
+
+function shuffleIndices(indices) {
+  const result = [...indices]
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[result[i], result[j]] = [result[j], result[i]]
+  }
+  return result
+}
+
+function rebuildShuffleQueue(currentIndex = activeTrackIndex.value) {
+  const playlist = activePlaylist.value
+  if (!playlist || !playlist.tracks.length) {
+    shuffleQueue.value = []
+    historyStack.value = []
+    return
+  }
+
+  const remaining = playlist.tracks
+    .map((_, index) => index)
+    .filter((index) => index !== currentIndex)
+
+  shuffleQueue.value = shuffleIndices(remaining)
+}
+
+function resetShuffleState(currentIndex = activeTrackIndex.value) {
+  historyStack.value = []
+  rebuildShuffleQueue(currentIndex)
+}
+
+function pushHistory(index) {
+  if (index < 0) {
+    return
+  }
+  const last = historyStack.value[historyStack.value.length - 1]
+  if (last !== index) {
+    historyStack.value = [...historyStack.value, index]
+  }
+}
+
+function takeNextShuffleIndex() {
   const playlist = activePlaylist.value
   if (!playlist || !playlist.tracks.length) {
     return -1
   }
 
-  if (playMode.value === 'shuffle') {
-    const choices = playlist.tracks
-      .map((_, index) => index)
-      .filter((index) => index !== activeTrackIndex.value)
-    return choices[Math.floor(Math.random() * choices.length)] ?? -1
+  if (!shuffleQueue.value.length) {
+    rebuildShuffleQueue(activeTrackIndex.value)
   }
 
-  const nextIndex = activeTrackIndex.value + offset
-  if (nextIndex >= playlist.tracks.length) {
-    return -1
-  }
-
-  return nextIndex
+  const nextIndex = shuffleQueue.value[0]
+  shuffleQueue.value = shuffleQueue.value.slice(1)
+  return typeof nextIndex === 'number' ? nextIndex : -1
 }
 
-function syncVolume() {
-  if (!audioRef.value) {
+function scheduleSaveSettings() {
+  if (!settingsReady.value) {
     return
   }
 
-  audioRef.value.volume = volume.value
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+  }
+
+  saveTimer = setTimeout(async () => {
+    try {
+      await saveSettings({
+        activePlaylistTitle: activePlaylistTitle.value,
+        activeTrackBvid: activeTrack.value?.bvid || '',
+        playMode: playMode.value,
+        volume: volume.value,
+        shuffleQueue: shuffleQueue.value,
+        historyStack: historyStack.value
+      })
+    } catch (err) {
+      error.value = err.message
+    }
+  }, 200)
+}
+
+function applyRestoredSettings() {
+  const settings = restoreSettings
+  if (!settings) {
+    settingsReady.value = true
+    return
+  }
+
+  if (settings.activePlaylistTitle && library.value[settings.activePlaylistTitle]) {
+    activePlaylistTitle.value = settings.activePlaylistTitle
+  }
+
+  if (!activePlaylistTitle.value) {
+    activePlaylistTitle.value = Object.keys(library.value)[0] || ''
+  }
+
+  const playlist = library.value[activePlaylistTitle.value] || []
+  if (settings.activeTrackBvid) {
+    const index = playlist.findIndex((track) => track.bvid === settings.activeTrackBvid)
+    activeTrackIndex.value = index >= 0 ? index : 0
+  }
+
+  playMode.value = settings.playMode === 'shuffle' ? 'shuffle' : 'sequence'
+  volume.value = typeof settings.volume === 'number' ? settings.volume : 0.72
+  shuffleQueue.value = Array.isArray(settings.shuffleQueue) ? settings.shuffleQueue : []
+  historyStack.value = Array.isArray(settings.historyStack) ? settings.historyStack : []
+
+  if (playMode.value === 'shuffle') {
+    const validIndices = new Set(playlist.map((_, index) => index))
+    shuffleQueue.value = shuffleQueue.value.filter((index) => validIndices.has(index) && index !== activeTrackIndex.value)
+    historyStack.value = historyStack.value.filter((index) => validIndices.has(index))
+    if (!shuffleQueue.value.length) {
+      rebuildShuffleQueue(activeTrackIndex.value)
+    }
+  } else {
+    shuffleQueue.value = []
+    historyStack.value = []
+  }
+
+  syncVolume()
+  settingsReady.value = true
 }
 
 async function loadLibrary() {
@@ -138,16 +255,25 @@ async function loadLibrary() {
     if (!titles.length) {
       activePlaylistTitle.value = ''
       activeTrackIndex.value = 0
+      shuffleQueue.value = []
+      historyStack.value = []
+      settingsReady.value = true
       return
     }
 
-    if (!payload[activePlaylistTitle.value]) {
+    if (!settingsReady.value && restoreSettings) {
+      applyRestoredSettings()
+    } else if (!payload[activePlaylistTitle.value]) {
       activePlaylistTitle.value = titles[0]
       activeTrackIndex.value = 0
+      resetShuffleState(0)
     } else {
       const trackCount = payload[activePlaylistTitle.value]?.length || 0
       if (activeTrackIndex.value >= trackCount) {
         activeTrackIndex.value = 0
+      }
+      if (playMode.value === 'shuffle' && !shuffleQueue.value.length) {
+        rebuildShuffleQueue(activeTrackIndex.value)
       }
     }
   } catch (err) {
@@ -173,7 +299,8 @@ async function prepareTrack(track = activeTrack.value) {
   return refreshed
 }
 
-async function playTrack(index) {
+async function playTrack(index, options = {}) {
+  const { preserveShuffle = false } = options
   const playlist = activePlaylist.value
   if (!playlist || !playlist.tracks[index]) {
     return
@@ -181,6 +308,10 @@ async function playTrack(index) {
 
   activeTrackIndex.value = index
   error.value = ''
+
+  if (playMode.value === 'shuffle' && !preserveShuffle) {
+    resetShuffleState(index)
+  }
 
   try {
     const track = await prepareTrack(playlist.tracks[index])
@@ -203,7 +334,6 @@ async function playTrackByBVID(bvid) {
   if (index === -1) {
     return
   }
-
   await playTrack(index)
 }
 
@@ -237,8 +367,26 @@ async function togglePlayback() {
 }
 
 async function playNext() {
-  const nextIndex = computeNextIndex()
-  if (nextIndex === -1) {
+  const playlist = activePlaylist.value
+  if (!playlist || !playlist.tracks.length) {
+    return
+  }
+
+  if (playMode.value === 'shuffle') {
+    const currentIndex = activeTrackIndex.value
+    const nextIndex = takeNextShuffleIndex()
+    if (nextIndex === -1) {
+      statusText.value = '随机队列已刷新。'
+      return
+    }
+
+    pushHistory(currentIndex)
+    await playTrack(nextIndex, { preserveShuffle: true })
+    return
+  }
+
+  const nextIndex = activeTrackIndex.value + 1
+  if (nextIndex >= playlist.tracks.length) {
     isPlaying.value = false
     statusText.value = '队列已经播放完。'
     return
@@ -253,6 +401,19 @@ async function playPrevious() {
     return
   }
 
+  if (playMode.value === 'shuffle') {
+    const history = [...historyStack.value]
+    const previousIndex = history.pop()
+    if (typeof previousIndex !== 'number') {
+      return
+    }
+
+    shuffleQueue.value = [activeTrackIndex.value, ...shuffleQueue.value]
+    historyStack.value = history
+    await playTrack(previousIndex, { preserveShuffle: true })
+    return
+  }
+
   const previousIndex = Math.max(activeTrackIndex.value - 1, 0)
   await playTrack(previousIndex)
 }
@@ -262,7 +423,10 @@ async function queuePrefetch() {
     return
   }
 
-  const missing = upcomingTracks.value.filter((track) => !track.audio).map((track) => track.bvid)
+  const missing = upcomingTracks.value
+    .filter((track) => track && !track.audio)
+    .map((track) => track.bvid)
+
   if (!missing.length) {
     return
   }
@@ -272,6 +436,46 @@ async function queuePrefetch() {
     await loadLibrary()
   } catch (err) {
     error.value = err.message
+  }
+}
+
+async function importFromVideo() {
+  if (!importVideoID.value.trim()) {
+    error.value = '请输入 BV 号。'
+    return
+  }
+
+  importBusy.value = true
+  error.value = ''
+  try {
+    await importVideo(importVideoID.value.trim())
+    importVideoID.value = ''
+    statusText.value = '视频合集已导入。'
+    await loadLibrary()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    importBusy.value = false
+  }
+}
+
+async function importFromList() {
+  if (!importListID.value.trim()) {
+    error.value = '请输入收藏夹 ID。'
+    return
+  }
+
+  importBusy.value = true
+  error.value = ''
+  try {
+    await importList(importListID.value.trim())
+    importListID.value = ''
+    statusText.value = '收藏夹已导入。'
+    await loadLibrary()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    importBusy.value = false
   }
 }
 
@@ -350,22 +554,63 @@ function onKeydown(event) {
 
 watch(activePlaylistTitle, async () => {
   activeTrackIndex.value = 0
+  if (playMode.value === 'shuffle') {
+    resetShuffleState(0)
+  }
   await queuePrefetch()
+  scheduleSaveSettings()
 })
 
-watch([activeTrackIndex, playMode], async () => {
+watch(playMode, async (mode) => {
+  if (mode === 'shuffle') {
+    resetShuffleState(activeTrackIndex.value)
+    statusText.value = '随机队列已生成。'
+  } else {
+    historyStack.value = []
+    shuffleQueue.value = []
+    statusText.value = '已切换到顺序播放。'
+  }
   await queuePrefetch()
+  scheduleSaveSettings()
 })
+
+watch(activeTrackIndex, async () => {
+  await queuePrefetch()
+  scheduleSaveSettings()
+})
+
+watch(volume, () => {
+  scheduleSaveSettings()
+})
+
+watch(shuffleQueue, () => {
+  scheduleSaveSettings()
+}, { deep: true })
+
+watch(historyStack, () => {
+  scheduleSaveSettings()
+}, { deep: true })
 
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
+  try {
+    restoreSettings = await fetchSettings()
+  } catch (err) {
+    error.value = err.message
+  }
   await loadLibrary()
+  if (!settingsReady.value) {
+    applyRestoredSettings()
+  }
   syncVolume()
   await queuePrefetch()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+  }
 })
 </script>
 
@@ -378,6 +623,25 @@ onUnmounted(() => {
       <div class="brand">
         <p class="eyebrow">BMplayer</p>
         <h1>Moonlit Library</h1>
+      </div>
+
+      <div class="import-panel">
+        <p class="eyebrow">Import</p>
+        <label class="search compact">
+          <span>视频 BV</span>
+          <input v-model="importVideoID" type="text" placeholder="例如 BV1oU1jBXEN8" />
+        </label>
+        <button class="control accent import-action" :disabled="importBusy" @click="importFromVideo">
+          导入视频合集
+        </button>
+
+        <label class="search compact">
+          <span>收藏夹 ID</span>
+          <input v-model="importListID" type="text" placeholder="例如 ml3888553754" />
+        </label>
+        <button class="control import-action" :disabled="importBusy" @click="importFromList">
+          导入收藏夹
+        </button>
       </div>
 
       <label class="search">
