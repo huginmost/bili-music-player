@@ -86,6 +86,14 @@ func run(args []string, stdout io.Writer) error {
 			return fmt.Errorf("bili_audio_download failed: %w", err)
 		}
 		return nil
+	case "-del":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: bilig -del [title]")
+		}
+		if err := client.DeleteTitle(args[1]); err != nil {
+			return fmt.Errorf("bili_del failed: %w", err)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}

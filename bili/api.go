@@ -39,3 +39,8 @@ func (b *Bili) ParseJSON(inputPath string) (map[string]any, string, error) {
 func (b *Bili) GetNestedString(data map[string]any, keys ...string) (string, bool) {
 	return GetNestedString(data, keys...)
 }
+
+// DeleteTitle is the exported wrapper for bili_del.
+func (b *Bili) DeleteTitle(title string) error {
+	return b.DeletePlaylist(title)
+}

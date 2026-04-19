@@ -9,3 +9,5 @@ LRCGET
 
 *.json
 *.m4a
+frontend/node_modules/
+frontend/dist/
