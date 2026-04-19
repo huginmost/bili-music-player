@@ -2,6 +2,7 @@
 .gomodcache/
 .gotmp/
 .testdata/
+release
 
 LRCGET
 
@@ -12,4 +13,3 @@ LRCGET
 frontend/node_modules/
 frontend/dist/
 
-release/
