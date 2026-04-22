@@ -36,6 +36,8 @@ const importBusy = ref(false)
 const shuffleQueue = ref([])
 const historyStack = ref([])
 const settingsReady = ref(false)
+const pendingResumeTime = ref(null)
+const playbackRetryCount = ref(0)
 let restoreSettings = null
 let saveTimer = null
 
@@ -190,6 +192,7 @@ function scheduleSaveSettings() {
       await saveSettings({
         activePlaylistTitle: activePlaylistTitle.value,
         activeTrackBvid: activeTrack.value?.bvid || '',
+        currentTime: currentTime.value,
         playMode: playMode.value,
         volume: volume.value,
         shuffleQueue: shuffleQueue.value,
@@ -222,6 +225,7 @@ function applyRestoredSettings() {
     activeTrackIndex.value = index >= 0 ? index : 0
   }
 
+  currentTime.value = Number.isFinite(settings.currentTime) && settings.currentTime > 0 ? settings.currentTime : 0
   playMode.value = settings.playMode === 'shuffle' ? 'shuffle' : 'sequence'
   volume.value = typeof settings.volume === 'number' ? settings.volume : 0.72
   shuffleQueue.value = Array.isArray(settings.shuffleQueue) ? settings.shuffleQueue : []
@@ -300,7 +304,7 @@ async function prepareTrack(track = activeTrack.value) {
 }
 
 async function playTrack(index, options = {}) {
-  const { preserveShuffle = false } = options
+  const { preserveShuffle = false, startTime = 0, forceReload = false } = options
   const playlist = activePlaylist.value
   if (!playlist || !playlist.tracks[index]) {
     return
@@ -319,7 +323,16 @@ async function playTrack(index, options = {}) {
       return
     }
 
-    audioRef.value.src = audioURL(activePlaylistTitle.value, track.bvid)
+    currentTime.value = Number.isFinite(startTime) && startTime > 0 ? startTime : 0
+    pendingResumeTime.value = currentTime.value
+    if (!forceReload) {
+      playbackRetryCount.value = 0
+    }
+
+    const nextAudioSource = audioURL(activePlaylistTitle.value, track.bvid)
+    if (forceReload || audioRef.value.src !== nextAudioSource) {
+      audioRef.value.src = nextAudioSource
+    }
     syncVolume()
     await audioRef.value.play()
     isPlaying.value = true
@@ -349,8 +362,12 @@ async function togglePlayback() {
 
   if (audioRef.value.paused) {
     try {
-      await prepareTrack(activeTrack.value)
-      audioRef.value.src = audioURL(activePlaylistTitle.value, activeTrack.value.bvid)
+      const expectedAudioSource = audioURL(activePlaylistTitle.value, activeTrack.value.bvid)
+      if (!audioRef.value.src || audioRef.value.src !== expectedAudioSource) {
+        await playTrack(activeTrackIndex.value, { startTime: currentTime.value })
+        return
+      }
+
       syncVolume()
       await audioRef.value.play()
       isPlaying.value = true
@@ -364,6 +381,7 @@ async function togglePlayback() {
   audioRef.value.pause()
   isPlaying.value = false
   statusText.value = '已暂停播放。'
+  scheduleSaveSettings()
 }
 
 async function playNext() {
@@ -526,6 +544,7 @@ function onTimeUpdate() {
 
   currentTime.value = audioRef.value.currentTime
   duration.value = audioRef.value.duration || 0
+  scheduleSaveSettings()
 }
 
 function onSeek(event) {
@@ -533,7 +552,10 @@ function onSeek(event) {
     return
   }
 
-  audioRef.value.currentTime = Number(event.target.value)
+  const nextTime = Number(event.target.value)
+  audioRef.value.currentTime = nextTime
+  currentTime.value = nextTime
+  scheduleSaveSettings()
 }
 
 function onVolumeInput(event) {
@@ -545,6 +567,53 @@ function onAudioEnded() {
   playNext()
 }
 
+function onLoadedMetadata() {
+  if (!audioRef.value) {
+    return
+  }
+
+  duration.value = audioRef.value.duration || 0
+  if (pendingResumeTime.value !== null) {
+    audioRef.value.currentTime = pendingResumeTime.value
+    currentTime.value = pendingResumeTime.value
+    pendingResumeTime.value = null
+  }
+}
+
+function onAudioPlay() {
+  isPlaying.value = true
+  scheduleSaveSettings()
+}
+
+function onAudioPause() {
+  isPlaying.value = false
+  scheduleSaveSettings()
+}
+
+async function retryCurrentTrack(message) {
+  if (!activeTrack.value || playbackRetryCount.value >= 1) {
+    error.value = message
+    return
+  }
+
+  playbackRetryCount.value += 1
+  statusText.value = '音频连接异常，正在重试。'
+
+  try {
+    await playTrack(activeTrackIndex.value, {
+      preserveShuffle: true,
+      startTime: currentTime.value,
+      forceReload: true
+    })
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
+function onAudioError() {
+  retryCurrentTrack('音频播放失败')
+}
+
 function onKeydown(event) {
   if (event.code === 'Space' && event.target.tagName !== 'INPUT') {
     event.preventDefault()
@@ -554,6 +623,9 @@ function onKeydown(event) {
 
 watch(activePlaylistTitle, async () => {
   activeTrackIndex.value = 0
+  currentTime.value = 0
+  duration.value = 0
+  pendingResumeTime.value = null
   if (playMode.value === 'shuffle') {
     resetShuffleState(0)
   }
@@ -776,10 +848,12 @@ onUnmounted(() => {
     <audio
       ref="audioRef"
       preload="auto"
+      @loadedmetadata="onLoadedMetadata"
       @timeupdate="onTimeUpdate"
       @ended="onAudioEnded"
-      @play="isPlaying = true"
-      @pause="isPlaying = false"
+      @play="onAudioPlay"
+      @pause="onAudioPause"
+      @error="onAudioError"
     />
   </div>
 </template>

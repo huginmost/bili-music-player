@@ -9,6 +9,7 @@ import (
 type PlayerSettings struct {
 	ActivePlaylistTitle string  `json:"activePlaylistTitle"`
 	ActiveTrackBVID     string  `json:"activeTrackBvid"`
+	CurrentTime         float64 `json:"currentTime"`
 	PlayMode            string  `json:"playMode"`
 	Volume              float64 `json:"volume"`
 	ShuffleQueue        []int   `json:"shuffleQueue"`
@@ -45,6 +46,9 @@ func (b *Bili) ReadSettings() (PlayerSettings, error) {
 	if settings.PlayMode == "" {
 		settings.PlayMode = "sequence"
 	}
+	if settings.CurrentTime < 0 {
+		settings.CurrentTime = 0
+	}
 	if settings.Volume < 0 || settings.Volume > 1 {
 		settings.Volume = 0.72
 	}
@@ -61,6 +65,9 @@ func (b *Bili) ReadSettings() (PlayerSettings, error) {
 func (b *Bili) WriteSettings(settings PlayerSettings) error {
 	if settings.PlayMode == "" {
 		settings.PlayMode = "sequence"
+	}
+	if settings.CurrentTime < 0 {
+		settings.CurrentTime = 0
 	}
 	if settings.Volume < 0 {
 		settings.Volume = 0

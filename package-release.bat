@@ -22,12 +22,12 @@ if errorlevel 1 goto :fail
 cd /d "%ROOT%"
 
 echo Copying files to release...
-copy /Y bilig.exe release\bilig.exe >nul
+move /Y bilig.exe release\bilig.exe >nul
 if errorlevel 1 goto :copyfail
-copy /Y bmplayer-web.exe release\bmplayer-web.exe >nul
+move /Y bmplayer-web.exe release\bmplayer-web.exe >nul
 if errorlevel 1 goto :copyfail
 if exist bmpinfo.json (
-  copy /Y bmpinfo.json release\bmpinfo.json >nul
+  move /Y bmpinfo.json release\bmpinfo.json >nul
   if errorlevel 1 goto :copyfail
 )
 xcopy /E /I /Y frontend\dist release\frontend >nul

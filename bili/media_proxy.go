@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 // ProxyImage streams one remote image through the local server.
@@ -32,7 +33,20 @@ func (b *Bili) ProxyTrackAudio(w http.ResponseWriter, r *http.Request, playlistT
 		headers["Range"] = rangeHeader
 	}
 
-	return b.proxyMedia(w, r, item.Audio, headers)
+	if err := b.proxyMedia(w, r, item.Audio, headers); err != nil {
+		if !shouldRetryProxyAudio(err) {
+			return err
+		}
+
+		item, refreshErr := b.RefreshTrackAudio(playlistTitle, bvid)
+		if refreshErr != nil {
+			return refreshErr
+		}
+
+		return b.proxyMedia(w, r, item.Audio, headers)
+	}
+
+	return nil
 }
 
 func (b *Bili) proxyMedia(w http.ResponseWriter, r *http.Request, mediaURL string, headers map[string]string) error {
@@ -72,4 +86,16 @@ func copyProxyHeader(dst, src http.Header, key string) {
 	if value := src.Get(key); value != "" {
 		dst.Set(key, value)
 	}
+}
+
+func shouldRetryProxyAudio(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := err.Error()
+	return strings.Contains(message, "unexpected status code: 401") ||
+		strings.Contains(message, "unexpected status code: 403") ||
+		strings.Contains(message, "unexpected status code: 404") ||
+		strings.Contains(message, "unexpected status code: 410")
 }

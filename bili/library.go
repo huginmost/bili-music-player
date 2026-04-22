@@ -97,6 +97,44 @@ func (b *Bili) EnsureTrackAudio(playlistTitle, bvid string) (BMPInfoItem, error)
 	return item, nil
 }
 
+// RefreshTrackAudio forces one track to fetch a fresh audio URL and persists it.
+func (b *Bili) RefreshTrackAudio(playlistTitle, bvid string) (BMPInfoItem, error) {
+	payload, err := b.ReadBMPInfo()
+	if err != nil {
+		return BMPInfoItem{}, err
+	}
+
+	items, ok := payload[playlistTitle]
+	if !ok {
+		return BMPInfoItem{}, fmt.Errorf("playlist %q not found", playlistTitle)
+	}
+
+	for i := range items {
+		if items[i].BVID != bvid {
+			continue
+		}
+
+		if _, err := b.GetPlayInfo(items[i].BVID, PlayInfoPath); err != nil {
+			return BMPInfoItem{}, err
+		}
+
+		audioURL, err := b.GetAudio()
+		if err != nil {
+			return BMPInfoItem{}, err
+		}
+
+		items[i].Audio = audioURL
+		payload[playlistTitle] = items
+		if err := b.writeBMPInfo(payload); err != nil {
+			return BMPInfoItem{}, err
+		}
+
+		return items[i], nil
+	}
+
+	return BMPInfoItem{}, fmt.Errorf("bvid %s not found in playlist %q", bvid, playlistTitle)
+}
+
 // DownloadTrack refreshes one track if needed, then saves it under outputDir.
 func (b *Bili) DownloadTrack(playlistTitle, bvid string, outputDir string) (string, error) {
 	item, err := b.EnsureTrackAudio(playlistTitle, bvid)
