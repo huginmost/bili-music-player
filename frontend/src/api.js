@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8765/api'
+const API_BASE = window.BMPLAYER_API_BASE || import.meta.env.VITE_API_BASE || 'http://localhost:8765/api'
 const MEDIA_BASE = API_BASE.replace(/\/api$/, '')
 
 async function request(path, options = {}) {

@@ -40,6 +40,7 @@ const pendingResumeTime = ref(null)
 const playbackRetryCount = ref(0)
 let restoreSettings = null
 let saveTimer = null
+let prefetchKey = ''
 
 const playlists = computed(() =>
   Object.entries(library.value).map(([title, tracks]) => ({
@@ -247,8 +248,11 @@ function applyRestoredSettings() {
   settingsReady.value = true
 }
 
-async function loadLibrary() {
-  loading.value = true
+async function loadLibrary(options = {}) {
+  const { silent = false } = options
+  if (!silent) {
+    loading.value = true
+  }
   error.value = ''
 
   try {
@@ -283,7 +287,9 @@ async function loadLibrary() {
   } catch (err) {
     error.value = err.message
   } finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
   }
 }
 
@@ -298,7 +304,7 @@ async function prepareTrack(track = activeTrack.value) {
 
   statusText.value = `正在更新 ${track.title} 的音频链接...`
   const refreshed = await refreshTrackAudio(activePlaylistTitle.value, track.bvid)
-  await loadLibrary()
+  await loadLibrary({ silent: true })
   statusText.value = `音频已更新：${refreshed.title}`
   return refreshed
 }
@@ -449,11 +455,21 @@ async function queuePrefetch() {
     return
   }
 
+  const nextPrefetchKey = `${activePlaylistTitle.value}:${missing.join(',')}`
+  if (prefetchKey === nextPrefetchKey) {
+    return
+  }
+  prefetchKey = nextPrefetchKey
+
   try {
     await prefetchTrackAudio(activePlaylistTitle.value, missing)
-    await loadLibrary()
+    await loadLibrary({ silent: true })
   } catch (err) {
     error.value = err.message
+  } finally {
+    if (prefetchKey === nextPrefetchKey) {
+      prefetchKey = ''
+    }
   }
 }
 

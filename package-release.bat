@@ -21,10 +21,16 @@ call npm run build
 if errorlevel 1 goto :fail
 cd /d "%ROOT%"
 
+echo Building BMPlayer.exe...
+call wails build -clean
+if errorlevel 1 goto :fail
+
 echo Copying files to release...
 move /Y bilig.exe release\bilig.exe >nul
 if errorlevel 1 goto :copyfail
 move /Y bmplayer-web.exe release\bmplayer-web.exe >nul
+if errorlevel 1 goto :copyfail
+copy /Y build\bin\BMPlayer.exe release\BMPlayer.exe >nul
 if errorlevel 1 goto :copyfail
 if exist bmpinfo.json (
   move /Y bmpinfo.json release\bmpinfo.json >nul
