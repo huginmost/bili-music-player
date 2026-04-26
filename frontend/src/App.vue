@@ -41,6 +41,7 @@ const playbackRetryCount = ref(0)
 let restoreSettings = null
 let saveTimer = null
 let prefetchKey = ''
+let playRequestId = 0
 
 const playlists = computed(() =>
   Object.entries(library.value).map(([title, tracks]) => ({
@@ -123,6 +124,15 @@ function syncVolume() {
   if (audioRef.value) {
     audioRef.value.volume = volume.value
   }
+}
+
+function isInterruptedPlayRequest(err) {
+  const message = String(err?.message || err || '')
+  return (
+    err?.name === 'AbortError' ||
+    message.includes('The play() request was interrupted') ||
+    message.includes('interrupted by a new load request')
+  )
 }
 
 function shuffleIndices(indices) {
@@ -311,6 +321,7 @@ async function prepareTrack(track = activeTrack.value) {
 
 async function playTrack(index, options = {}) {
   const { preserveShuffle = false, startTime = 0, forceReload = false } = options
+  const requestId = ++playRequestId
   const playlist = activePlaylist.value
   if (!playlist || !playlist.tracks[index]) {
     return
@@ -325,6 +336,9 @@ async function playTrack(index, options = {}) {
 
   try {
     const track = await prepareTrack(playlist.tracks[index])
+    if (requestId !== playRequestId) {
+      return
+    }
     if (!track || !audioRef.value) {
       return
     }
@@ -341,9 +355,15 @@ async function playTrack(index, options = {}) {
     }
     syncVolume()
     await audioRef.value.play()
+    if (requestId !== playRequestId) {
+      return
+    }
     isPlaying.value = true
     statusText.value = `正在播放：${track.title}`
   } catch (err) {
+    if (isInterruptedPlayRequest(err) || requestId !== playRequestId) {
+      return
+    }
     error.value = err.message
   }
 }
@@ -379,11 +399,15 @@ async function togglePlayback() {
       isPlaying.value = true
       statusText.value = `正在播放：${activeTrack.value.title}`
     } catch (err) {
+      if (isInterruptedPlayRequest(err)) {
+        return
+      }
       error.value = err.message
     }
     return
   }
 
+  playRequestId += 1
   audioRef.value.pause()
   isPlaying.value = false
   statusText.value = '已暂停播放。'

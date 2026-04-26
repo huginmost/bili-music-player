@@ -33,8 +33,8 @@ func main() {
 
 	err = wails.Run(&options.App{
 		Title:            "BMPlayer",
-		Width:            1180,
-		Height:           760,
+		Width:            1600,
+		Height:           900,
 		WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets:     dist,
